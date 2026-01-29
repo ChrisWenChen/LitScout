@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+results_raw.md
+results_raw.jsonl
+output-*/
+*.db

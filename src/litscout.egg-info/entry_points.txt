@@ -1,0 +1,2 @@
+[console_scripts]
+litscout = litscout.cli:app
