@@ -1,6 +1,6 @@
 # LitScout (Literature Scout) — MVP-1
 
-LitScout is a lightweight research tooling CLI that searches papers from arXiv and Semantic Scholar, normalizes and deduplicates results, and persists them to Markdown, JSONL, and a SQLite database.
+LitScout is a lightweight research tooling CLI that searches papers from arXiv, Semantic Scholar, INSPIRE-HEP, and NASA ADS, normalizes and deduplicates results, and persists them to Markdown, JSONL, and a SQLite database.
 
 ## Installation
 
@@ -11,6 +11,8 @@ pip install -e .
 ## Environment Variables
 
 - `S2_API_KEY`: Semantic Scholar Graph API key. If missing, LitScout will warn and continue using arXiv only.
+- `ADS_API_TOKEN`: NASA ADS API token (Authorization: Bearer <token>). If missing, LitScout will warn and skip ADS.
+- `INSPIRE_API_KEY`: Optional INSPIRE-HEP API key. If missing, LitScout will warn and continue without a key.
 - `OPENAI_API_KEY`: Required for `litscout enrich` when provider is `openai`.
 - `MIMO_API_KEY`: Required for `litscout enrich` when provider is `mimo`.
 - `DEEPSEEK_API_KEY`: Required for `litscout enrich` when provider is `deepseek`.
@@ -20,6 +22,8 @@ pip install -e .
 
 ```bash
 litscout search "graph neural networks" --topk 5 --since 2020
+litscout search "higgs effective field theory" --sources arxiv,inspire --topk 20 --since 2018
+litscout search "exoplanet atmosphere retrieval" --sources ads --topk 20 --since 2018
 ```
 
 Common options:
@@ -38,6 +42,7 @@ Common options:
 - `--cache-ttl-seconds`: Cache TTL in seconds (default: 86400)
 - `--cache-max-entries`: Max cache entries (default: 2000)
 - `--log-level`: Log level (DEBUG, INFO, WARNING, ERROR)
+- `--sources`: Comma-separated sources (arxiv,s2,inspire,ads). Default: arxiv + s2 if key.
 
 ## Output Formats
 
@@ -100,7 +105,7 @@ Lite insight schema (per paper, single-item response or within `items`):
 
 ## Rate Limiting & Retries
 
-- A shared async rate limiter controls requests across arXiv and Semantic Scholar.
+- A shared async rate limiter controls requests across arXiv, Semantic Scholar, INSPIRE-HEP, and NASA ADS.
 - Failed requests are retried up to 2 times with exponential backoff.
 
 ## Cache Cleanup

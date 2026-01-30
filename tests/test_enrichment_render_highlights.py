@@ -7,6 +7,7 @@ from litscout.enrichment.models import (
     LiteInsight,
     Provenance,
     RankingBreakdown,
+    ResearchGoal,
 )
 from litscout.enrichment.render_md import render_enriched_markdown
 
@@ -103,9 +104,13 @@ def test_render_highlights_goal_lists_and_authors_links():
         provenance=_provenance(),
     )
 
-    md = render_enriched_markdown([p2, p3, p1], "goal")
+    goals = [
+        ResearchGoal(goal_id="G1", name="G1", description="Test goal description", signals=[], negative_signals=[]),
+    ]
+    md = render_enriched_markdown([p2, p3, p1], "goal", goals)
 
-    assert "最贴合 G1：" in md
+    assert "# G1" in md
+    assert "Test goal description" in md
     assert "authors: A1, A2, …, A5, A6" in md
-    assert "doi:10.1000/test" in md
+    assert "https://doi.org/10.1000/test" in md
     assert "arxiv:1234.5678" in md

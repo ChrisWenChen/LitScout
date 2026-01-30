@@ -1,0 +1,27 @@
+{
+  "hits": {
+    "hits": [
+      {
+        "id": "123456",
+        "links": {
+          "self": "https://inspirehep.net/api/literature/123456",
+          "html": "https://inspirehep.net/literature/123456"
+        },
+        "metadata": {
+          "control_number": 123456,
+          "titles": [{"title": "Inspire Title"}],
+          "authors": [
+            {"full_name": "Alice A."},
+            {"full_name": "Bob B."}
+          ],
+          "publication_info": [{"year": 2021, "journal_title": "Phys Rev D"}],
+          "dois": [{"value": "10.1234/INSP"}],
+          "arxiv_eprints": [{"value": "2101.00001"}],
+          "abstracts": [{"value": "Inspire abstract."}],
+          "urls": [{"value": "https://inspirehep.net/literature/123456"}],
+          "primary_arxiv_category": {"term": "hep-ph"}
+        }
+      }
+    ]
+  }
+}

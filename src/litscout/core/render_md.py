@@ -33,6 +33,7 @@ def render_markdown(
         lines.append(f"- **Authors**: `{authors}`")
         lines.append(f"- **DOI**: `{paper.doi or 'N/A'}`")
         lines.append(f"- **arXiv**: `{paper.arxiv_id or 'N/A'}`")
+        lines.append(f"- **ADS Bibcode**: `{paper.bibcode or 'N/A'}`")
         lines.append(f"- **Venue**: `{paper.venue or 'N/A'}`")
         lines.append(f"- **Primary URL**: `{paper.url_primary or 'N/A'}`")
         lines.append("")
@@ -46,6 +47,16 @@ def render_markdown(
                 citations_value = citations if citations is not None else "N/A"
                 lines.append(
                     f"- **Semantic Scholar**: retrieved `{source.retrieved_at}` | url: `{source.source_url or 'N/A'}` | citations: `{citations_value}`"
+                )
+            elif source.source_name == "inspire":
+                control = source.extra.get("control_number") or "N/A"
+                lines.append(
+                    f"- **INSPIRE-HEP**: retrieved `{source.retrieved_at}` | url: `{source.source_url or 'N/A'}` | control: `{control}`"
+                )
+            elif source.source_name == "ads":
+                bibcode = source.extra.get("bibcode") or "N/A"
+                lines.append(
+                    f"- **NASA ADS**: retrieved `{source.retrieved_at}` | url: `{source.source_url or 'N/A'}` | bibcode: `{bibcode}`"
                 )
             else:
                 lines.append(

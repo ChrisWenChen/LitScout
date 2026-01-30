@@ -12,7 +12,7 @@ def utc_now_iso() -> str:
 
 
 class SourceRecord(BaseModel):
-    source_name: Literal["arxiv", "semantic_scholar"]
+    source_name: Literal["arxiv", "semantic_scholar", "inspire", "ads"]
     retrieved_at: str
     source_url: Optional[str] = None
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -26,6 +26,7 @@ class CanonicalPaper(BaseModel):
     abstract: Optional[str] = None
     doi: Optional[str] = None
     arxiv_id: Optional[str] = None
+    bibcode: Optional[str] = None
     url_primary: Optional[str] = None
     venue: Optional[str] = None
     sources: list[SourceRecord] = Field(default_factory=list)

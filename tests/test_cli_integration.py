@@ -115,6 +115,7 @@ def test_cli_cache_hit_skips_fetch(tmp_path, monkeypatch):
             3600,
             2000,
             False,
+            None,
         )
     )
 
@@ -140,6 +141,7 @@ def test_cli_cache_hit_skips_fetch(tmp_path, monkeypatch):
             3600,
             2000,
             False,
+            None,
         )
     )
 
@@ -217,6 +219,7 @@ def test_cli_filters_year_range(tmp_path, monkeypatch):
             3600,
             2000,
             False,
+            None,
         )
     )
 

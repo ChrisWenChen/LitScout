@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -69,7 +70,7 @@ def _load_json(text: str) -> dict[str, Any]:
                 try:
                     repaired = _repair_json(candidate)
                     payload = json.loads(repaired)
-                    print("LLM JSON repaired")
+                    logging.getLogger(__name__).warning("LLM JSON repaired")
                     return payload
                 except Exception as exc:
                     last_exc = exc
@@ -134,9 +135,10 @@ class OpenAIClient(LLMClient):
         if self.limiter:
             await self.limiter.acquire()
 
+        logger = logging.getLogger(__name__)
         started = time.monotonic()
-        print(
-            "LLM request start",
+        logger.info(
+            "LLM request start %s",
             {
                 "provider": self.config.provider,
                 "model": self.config.model,
@@ -156,6 +158,7 @@ class OpenAIClient(LLMClient):
             data = resp.json()
 
         elapsed_ms = int((time.monotonic() - started) * 1000)
+        usage = data.get("usage") if isinstance(data, dict) else None
         text = None
         if isinstance(data, dict):
             text = data.get("output_text")
@@ -168,13 +171,14 @@ class OpenAIClient(LLMClient):
         if not text:
             raise RuntimeError("OpenAI response missing output text")
 
-        print(
-            "LLM request done",
+        logger.info(
+            "LLM request done %s",
             {
                 "provider": self.config.provider,
                 "model": self.config.model,
                 "elapsed_ms": elapsed_ms,
                 "response_chars": len(text),
+                "usage": usage,
             },
         )
         return _load_json(text)
@@ -214,9 +218,10 @@ class OpenAICompatChatClient(LLMClient):
         if self.limiter:
             await self.limiter.acquire()
 
+        logger = logging.getLogger(__name__)
         started = time.monotonic()
-        print(
-            "LLM request start",
+        logger.info(
+            "LLM request start %s",
             {
                 "provider": self.config.provider,
                 "model": self.config.model,
@@ -236,7 +241,7 @@ class OpenAICompatChatClient(LLMClient):
                 resp.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 detail = resp.text
-                print(f"LLM request failed ({resp.status_code}): {detail}")
+                logger.error("LLM request failed (%s): %s", resp.status_code, detail)
                 raise RuntimeError(
                     f"LLM request failed ({resp.status_code}): {detail}"
                 ) from exc
@@ -248,13 +253,15 @@ class OpenAICompatChatClient(LLMClient):
             raise RuntimeError("Chat completion response missing content") from exc
 
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        print(
-            "LLM request done",
+        usage = data.get("usage") if isinstance(data, dict) else None
+        logger.info(
+            "LLM request done %s",
             {
                 "provider": self.config.provider,
                 "model": self.config.model,
                 "elapsed_ms": elapsed_ms,
                 "response_chars": len(content),
+                "usage": usage,
             },
         )
         return _load_json(content)

@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sqlite3
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -13,7 +14,9 @@ import httpx
 import typer
 
 from litscout.connectors.arxiv import search_arxiv
+from litscout.connectors.inspire import search_inspire
 from litscout.connectors.semanticscholar import search_semantic_scholar
+from litscout.connectors.ads import search_ads
 from litscout.core.cache import CacheStore
 from litscout.core.dedupe import dedupe_papers
 from litscout.core.models import CanonicalPaper
@@ -36,6 +39,110 @@ app = typer.Typer(
 
 CACHE_VERSION = 1
 MAX_QUERY_LEN = 500
+SOURCE_ALIASES = {
+    "arxiv": "arxiv",
+    "s2": "semantic_scholar",
+    "semantic_scholar": "semantic_scholar",
+    "semantic-scholar": "semantic_scholar",
+    "semanticscholar": "semantic_scholar",
+    "inspire": "inspire",
+    "inspire-hep": "inspire",
+    "inspirehep": "inspire",
+    "ads": "ads",
+    "nasa-ads": "ads",
+    "nasa_ads": "ads",
+}
+SOURCE_LABELS = {
+    "arxiv": "arXiv",
+    "semantic_scholar": "Semantic Scholar",
+    "inspire": "INSPIRE-HEP",
+    "ads": "NASA ADS",
+}
+
+
+def _is_pytest_running() -> bool:
+    return os.environ.get("PYTEST_CURRENT_TEST") is not None
+
+
+def _configure_logging(log_level: str, log_file: str | None) -> None:
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    root = logging.getLogger()
+    root.setLevel(level)
+    formatter = _RedactingFormatter("%(asctime)s %(levelname)s %(message)s")
+    if root.handlers:
+        for handler in root.handlers:
+            handler.setLevel(level)
+            handler.setFormatter(formatter)
+        if log_file and not _is_pytest_running():
+            log_path = os.path.abspath(os.path.expanduser(log_file))
+            _ensure_parent(log_path)
+            for handler in root.handlers:
+                if isinstance(handler, logging.FileHandler):
+                    try:
+                        if os.path.abspath(handler.baseFilename) == log_path:
+                            return
+                    except Exception:
+                        continue
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setLevel(level)
+            file_handler.setFormatter(formatter)
+            root.addHandler(file_handler)
+        return
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if log_file and not _is_pytest_running():
+        _ensure_parent(log_file)
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    for handler in handlers:
+        handler.setLevel(level)
+        handler.setFormatter(formatter)
+        root.addHandler(handler)
+
+
+def _slugify_query(text: str, max_len: int = 64) -> str:
+    lowered = text.strip().lower()
+    cleaned = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
+    if not cleaned:
+        return "query"
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip("-")
+    return cleaned
+
+
+def _is_probably_valid_key(key: str | None) -> bool:
+    if not key:
+        return False
+    if any(ch.isspace() for ch in key):
+        return False
+    return len(key.strip()) >= 10
+
+
+class _RedactingFormatter(logging.Formatter):
+    _SENSITIVE_KEYS = ("key", "token", "secret", "authorization")
+
+    def format(self, record: logging.LogRecord) -> str:
+        if isinstance(record.args, dict):
+            record.args = self._redact_dict(record.args)
+        elif isinstance(record.args, tuple) and len(record.args) == 1:
+            arg = record.args[0]
+            if isinstance(arg, dict):
+                record.args = (self._redact_dict(arg),)
+        message = super().format(record)
+        return self._redact_message(message)
+
+    def _redact_message(self, message: str) -> str:
+        if "Bearer " in message:
+            prefix = message.split("Bearer ", 1)[0]
+            return f"{prefix}Bearer ***"
+        return message
+
+    def _redact_dict(self, data: dict) -> dict:
+        redacted: dict[str, object] = {}
+        for key, value in data.items():
+            if any(token in key.lower() for token in self._SENSITIVE_KEYS):
+                redacted[key] = "***"
+            else:
+                redacted[key] = value
+        return redacted
 
 
 def _ensure_parent(path: str) -> None:
@@ -55,6 +162,27 @@ def _cache_key(source: str, query: str, topk: int, since: Optional[int]) -> str:
         },
         sort_keys=True,
     )
+
+
+def _parse_sources(value: Optional[str]) -> Optional[list[str]]:
+    if value is None:
+        return None
+    items = [s.strip().lower() for s in value.split(",") if s.strip()]
+    if not items:
+        raise typer.BadParameter("sources must be non-empty")
+    normalized: list[str] = []
+    unknown: list[str] = []
+    for item in items:
+        mapped = SOURCE_ALIASES.get(item)
+        if not mapped:
+            unknown.append(item)
+            continue
+        if mapped not in normalized:
+            normalized.append(mapped)
+    if unknown:
+        allowed = ", ".join(sorted(set(SOURCE_ALIASES.keys())))
+        raise typer.BadParameter(f"Unknown sources: {', '.join(unknown)}. Allowed: {allowed}")
+    return normalized
 
 
 def _sort_key(paper: CanonicalPaper) -> tuple:
@@ -125,7 +253,10 @@ async def _run_search(
     cache_ttl: Optional[int],
     cache_max_entries: Optional[int],
     keyword_rank: bool,
+    sources: Optional[list[str]],
 ) -> None:
+    logger = logging.getLogger(__name__)
+    started = time.monotonic()
     storage = Storage(db_path)
     try:
         cache = CacheStore(storage.conn)
@@ -133,45 +264,137 @@ async def _run_search(
 
         sources_used: list[str] = []
         collected: list[CanonicalPaper] = []
+        selected_sources = sources or ["arxiv", "semantic_scholar"]
+        request_count = 0
+        cache_hit_count = 0
+        source_counts: dict[str, int] = {}
+        logger.info(
+            "Search start %s",
+            {"sources": selected_sources, "topk": topk, "since": since, "year_to": year_to},
+        )
+        logger.info("SQLite database: %s", db_path)
 
         queries_to_run = list(queries)
-        async with httpx.AsyncClient() as client:
-            for query in queries_to_run:
-                # arXiv
-                arxiv_key = _cache_key("arxiv", query, topk, since)
-                arxiv_data = None if no_cache else cache.get(arxiv_key, cache_ttl)
-                if arxiv_data is None:
-                    logging.info("Fetching arXiv results for query: %s", query)
-                    arxiv_papers = await search_arxiv(query, topk, since, client, limiter)
-                    cache.set(arxiv_key, [p.model_dump(mode="json") for p in arxiv_papers])
-                else:
-                    logging.info("Using cached arXiv results for query: %s", query)
-                    arxiv_papers = [CanonicalPaper.model_validate(p) for p in arxiv_data]
-                if arxiv_papers:
-                    sources_used.append("arXiv")
-                    collected.extend(arxiv_papers)
+        if "arxiv" in selected_sources:
+            async with httpx.AsyncClient() as client:
+                for query in queries_to_run:
+                    arxiv_key = _cache_key("arxiv", query, topk, since)
+                    arxiv_data = None if no_cache else cache.get(arxiv_key, cache_ttl)
+                    if arxiv_data is None:
+                        logging.info("Fetching arXiv results for query: %s", query)
+                        try:
+                            request_count += 1
+                            arxiv_papers = await search_arxiv(query, topk, since, client, limiter)
+                        except Exception as exc:
+                            logging.warning("arXiv search failed: %s", exc)
+                            arxiv_papers = []
+                        else:
+                            cache.set(arxiv_key, [p.model_dump(mode="json") for p in arxiv_papers])
+                    else:
+                        logging.info("Using cached arXiv results for query: %s", query)
+                        cache_hit_count += 1
+                        arxiv_papers = [CanonicalPaper.model_validate(p) for p in arxiv_data]
+                    if arxiv_papers:
+                        if SOURCE_LABELS["arxiv"] not in sources_used:
+                            sources_used.append(SOURCE_LABELS["arxiv"])
+                        collected.extend(arxiv_papers)
+                        source_counts["arxiv"] = source_counts.get("arxiv", 0) + len(arxiv_papers)
 
         s2_api_key = os.environ.get("S2_API_KEY")
-        if not s2_api_key:
-            typer.echo("Warning: S2_API_KEY is not set. Skipping Semantic Scholar.")
-        else:
-            headers = {"x-api-key": s2_api_key}
+        if "semantic_scholar" in selected_sources:
+            if not _is_probably_valid_key(s2_api_key):
+                typer.echo("Warning: S2_API_KEY is missing or invalid. Skipping Semantic Scholar.")
+            else:
+                headers = {"x-api-key": s2_api_key}
+                async with httpx.AsyncClient(headers=headers) as client:
+                    for query in queries_to_run:
+                        s2_key = _cache_key("semantic_scholar", query, topk, since)
+                        s2_data = None if no_cache else cache.get(s2_key, cache_ttl)
+                        if s2_data is None:
+                            logging.info("Fetching Semantic Scholar results for query: %s", query)
+                            try:
+                                request_count += 1
+                                s2_papers = await search_semantic_scholar(
+                                    query, topk, since, client, limiter
+                                )
+                            except Exception as exc:
+                                logging.warning("Semantic Scholar search failed: %s", exc)
+                                s2_papers = []
+                            else:
+                                cache.set(s2_key, [p.model_dump(mode="json") for p in s2_papers])
+                        else:
+                            logging.info("Using cached Semantic Scholar results for query: %s", query)
+                            cache_hit_count += 1
+                            s2_papers = [CanonicalPaper.model_validate(p) for p in s2_data]
+                        if s2_papers:
+                            if SOURCE_LABELS["semantic_scholar"] not in sources_used:
+                                sources_used.append(SOURCE_LABELS["semantic_scholar"])
+                            collected.extend(s2_papers)
+                            source_counts["semantic_scholar"] = source_counts.get("semantic_scholar", 0) + len(
+                                s2_papers
+                            )
+
+        if "inspire" in selected_sources:
+            inspire_api_key = os.environ.get("INSPIRE_API_KEY")
+            if inspire_api_key and not _is_probably_valid_key(inspire_api_key):
+                typer.echo("Warning: INSPIRE_API_KEY looks invalid. Continuing without key.")
+                inspire_api_key = None
+            if not inspire_api_key:
+                typer.echo("Warning: INSPIRE_API_KEY is not set. Continuing without key.")
+            headers = {"Authorization": f"Bearer {inspire_api_key}"} if inspire_api_key else None
             async with httpx.AsyncClient(headers=headers) as client:
                 for query in queries_to_run:
-                    s2_key = _cache_key("semantic_scholar", query, topk, since)
-                    s2_data = None if no_cache else cache.get(s2_key, cache_ttl)
-                    if s2_data is None:
-                        logging.info("Fetching Semantic Scholar results for query: %s", query)
-                        s2_papers = await search_semantic_scholar(
-                            query, topk, since, client, limiter
-                        )
-                        cache.set(s2_key, [p.model_dump(mode="json") for p in s2_papers])
+                    inspire_key = _cache_key("inspire", query, topk, since)
+                    inspire_data = None if no_cache else cache.get(inspire_key, cache_ttl)
+                    if inspire_data is None:
+                        logging.info("Fetching INSPIRE-HEP results for query: %s", query)
+                        try:
+                            request_count += 1
+                            inspire_papers = await search_inspire(query, topk, since, client, limiter)
+                        except Exception as exc:
+                            logging.warning("INSPIRE-HEP search failed: %s", exc)
+                            inspire_papers = []
+                        else:
+                            cache.set(inspire_key, [p.model_dump(mode="json") for p in inspire_papers])
                     else:
-                        logging.info("Using cached Semantic Scholar results for query: %s", query)
-                        s2_papers = [CanonicalPaper.model_validate(p) for p in s2_data]
-                    if s2_papers:
-                        sources_used.append("Semantic Scholar")
-                        collected.extend(s2_papers)
+                        logging.info("Using cached INSPIRE-HEP results for query: %s", query)
+                        cache_hit_count += 1
+                        inspire_papers = [CanonicalPaper.model_validate(p) for p in inspire_data]
+                    if inspire_papers:
+                        if SOURCE_LABELS["inspire"] not in sources_used:
+                            sources_used.append(SOURCE_LABELS["inspire"])
+                        collected.extend(inspire_papers)
+                        source_counts["inspire"] = source_counts.get("inspire", 0) + len(inspire_papers)
+
+        if "ads" in selected_sources:
+            ads_api_token = os.environ.get("ADS_API_TOKEN")
+            if not _is_probably_valid_key(ads_api_token):
+                typer.echo("Warning: ADS_API_TOKEN is missing or invalid. Skipping NASA ADS.")
+            else:
+                headers = {"Authorization": f"Bearer {ads_api_token}"}
+                async with httpx.AsyncClient(headers=headers) as client:
+                    for query in queries_to_run:
+                        ads_key = _cache_key("ads", query, topk, since)
+                        ads_data = None if no_cache else cache.get(ads_key, cache_ttl)
+                        if ads_data is None:
+                            logging.info("Fetching NASA ADS results for query: %s", query)
+                            try:
+                                request_count += 1
+                                ads_papers = await search_ads(query, topk, since, client, limiter)
+                            except Exception as exc:
+                                logging.warning("NASA ADS search failed: %s", exc)
+                                ads_papers = []
+                            else:
+                                cache.set(ads_key, [p.model_dump(mode="json") for p in ads_papers])
+                        else:
+                            logging.info("Using cached NASA ADS results for query: %s", query)
+                            cache_hit_count += 1
+                            ads_papers = [CanonicalPaper.model_validate(p) for p in ads_data]
+                        if ads_papers:
+                            if SOURCE_LABELS["ads"] not in sources_used:
+                                sources_used.append(SOURCE_LABELS["ads"])
+                            collected.extend(ads_papers)
+                            source_counts["ads"] = source_counts.get("ads", 0) + len(ads_papers)
 
         merged, notes_by_id = dedupe_papers(collected, strict=strict)
         if since is not None or year_to is not None:
@@ -213,6 +436,17 @@ async def _run_search(
             removed = cache.cleanup(cache_ttl, cache_max_entries)
             if removed:
                 logging.info("Cache cleanup removed %s entries", removed)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        logger.info(
+            "Search done %s",
+            {
+                "elapsed_ms": elapsed_ms,
+                "papers": len(merged),
+                "requests": request_count,
+                "cache_hits": cache_hit_count,
+                "source_counts": source_counts,
+            },
+        )
         typer.echo(f"Saved {len(merged)} papers to {out_md}, {out_jsonl}, and {db_path}.")
     except Exception as exc:
         typer.echo(f"Error: {exc}", err=True)
@@ -223,11 +457,12 @@ async def _run_search(
 
 @app.command(
     help=(
-        "Search papers from arXiv and Semantic Scholar.\n"
+        "Search papers from arXiv, Semantic Scholar, INSPIRE-HEP, and NASA ADS.\n"
         "Examples:\n"
         "  litscout search \"graph neural networks\" --topk 20\n"
         "  litscout search --query \"sign problem\" --query \"phase transition\" --keyword-rank\n"
-        "  litscout search --queries-file queries.txt"
+        "  litscout search --queries-file queries.txt\n"
+        "  litscout search \"higgs\" --sources arxiv,inspire,ads"
     )
 )
 def search(
@@ -264,6 +499,11 @@ def search(
     strict: bool = typer.Option(
         False, "--strict", help="Disable title-based deduplication"
     ),
+    sources: Optional[str] = typer.Option(
+        None,
+        "--sources",
+        help="Comma-separated sources: arxiv,s2,inspire,ads (default: arxiv + s2 if key)",
+    ),
     cache_ttl: Optional[int] = typer.Option(
         86400, "--cache-ttl-seconds", help="Cache TTL in seconds"
     ),
@@ -274,11 +514,6 @@ def search(
         "INFO", "--log-level", help="Log level (DEBUG, INFO, WARNING, ERROR)"
     ),
 ) -> None:
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
-
     if not query or not query.strip():
         if not queries and not queries_file:
             raise typer.BadParameter("query must be non-empty")
@@ -295,14 +530,6 @@ def search(
     if since is not None and year_to is not None and since > year_to:
         raise typer.BadParameter("since cannot be greater than year-to")
 
-    if out_md is None or out_jsonl is None:
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        out_dir = f"output-{ts}"
-        if out_md is None:
-            out_md = os.path.join(out_dir, "results_raw.md")
-        if out_jsonl is None:
-            out_jsonl = os.path.join(out_dir, "results_raw.jsonl")
-
     query_list = _load_queries(query, queries or [], queries_file)
     if not query_list:
         raise typer.BadParameter("no queries provided")
@@ -310,6 +537,22 @@ def search(
         raise typer.BadParameter(f"query is too long (>{MAX_QUERY_LEN})")
 
     display_query = " | ".join(query_list)
+    if out_md is None or out_jsonl is None:
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        slug = _slugify_query(query_list[0])
+        out_dir = f"{slug}-{ts}"
+        if out_md is None:
+            out_md = os.path.join(out_dir, f"{slug}-{ts}.results_raw.md")
+        if out_jsonl is None:
+            out_jsonl = os.path.join(out_dir, f"{slug}-{ts}.results_raw.jsonl")
+    log_file = None
+    if out_md:
+        log_dir = os.path.dirname(os.path.abspath(os.path.expanduser(out_md)))
+        if log_dir:
+            base = os.path.splitext(os.path.basename(out_md))[0]
+            log_file = os.path.join(log_dir, f"{base}.log")
+    _configure_logging(log_level, log_file)
+    sources_selected = _parse_sources(sources)
     asyncio.run(
         _run_search(
             query_list,
@@ -326,6 +569,7 @@ def search(
             cache_ttl,
             cache_max_entries,
             keyword_rank,
+            sources_selected,
         )
     )
 
@@ -348,6 +592,8 @@ async def _run_enrich(
     goal_weight: Optional[float],
     llm_concurrency: int,
 ) -> None:
+    logger = logging.getLogger(__name__)
+    started = time.monotonic()
     skill = load_skill_profile(skill_path)
     if provider:
         skill.llm.provider = provider
@@ -388,7 +634,18 @@ async def _run_enrich(
         api_key = os.environ.get("XAI_API_KEY")
     if api_key is not None:
         logging.debug("LLM API key length: %s", len(api_key))
+    if not _is_probably_valid_key(api_key):
+        raise RuntimeError(f"Invalid or missing API key for provider={skill.llm.provider}")
     client = build_client(config, api_key=api_key, limiter=limiter)
+    logger.info(
+        "Enrich start %s",
+        {
+            "provider": config.provider,
+            "model": config.model,
+            "base_url": config.base_url,
+            "batch_size": batch_size,
+        },
+    )
 
     papers = load_jsonl(in_jsonl)
     enriched = await enrich_papers(
@@ -406,10 +663,21 @@ async def _run_enrich(
     _ensure_parent(out_jsonl)
     _ensure_parent(out_md)
     dump_enriched_jsonl(out_jsonl, enriched)
-    md_text = render_enriched_markdown(enriched, goal)
+    md_text = render_enriched_markdown(enriched, goal, skill.goals)
     with open(os.path.expanduser(out_md), "w", encoding="utf-8") as f:
         f.write(md_text)
 
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    total_batches = (len(papers) + max(1, batch_size) - 1) // max(1, batch_size)
+    logger.info(
+        "Enrich done %s",
+        {
+            "elapsed_ms": elapsed_ms,
+            "papers": len(enriched),
+            "batches": total_batches,
+            "requests": total_batches,
+        },
+    )
     typer.echo(f"Saved {len(enriched)} enriched papers to {out_jsonl} and {out_md}.")
 
 
@@ -484,10 +752,13 @@ def enrich(
         "INFO", "--log-level", help="Log level (DEBUG, INFO, WARNING, ERROR)"
     ),
 ) -> None:
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    log_file = None
+    if out_md:
+        log_dir = os.path.dirname(os.path.abspath(os.path.expanduser(out_md)))
+        if log_dir:
+            base = os.path.splitext(os.path.basename(out_md))[0]
+            log_file = os.path.join(log_dir, f"{base}.log")
+    _configure_logging(log_level, log_file)
     if not goal.strip():
         raise typer.BadParameter("goal must be non-empty")
     if batch_size <= 0:

@@ -19,6 +19,7 @@ def _paper(title: str, source_name: str) -> CanonicalPaper:
         abstract="Test abstract.",
         doi="10.1000/test",
         arxiv_id="1234.5678",
+        bibcode="2024A&A...123..456A",
         url_primary="https://example.com/pdf",
         venue="TestConf",
         sources=[source],
@@ -39,6 +40,7 @@ def test_render_markdown_includes_fields():
     assert "**Canonical ID**" in md
     assert "**Authors**: `Ada Lovelace; Alan Turing`" in md
     assert "**DOI**: `10.1000/test`" in md
+    assert "**ADS Bibcode**: `2024A&A...123..456A`" in md
     assert "### Abstract" in md
     assert "Test abstract." in md
     assert "### Source Records" in md

@@ -41,6 +41,7 @@ class Storage:
                 abstract TEXT,
                 doi TEXT,
                 arxiv_id TEXT,
+                bibcode TEXT,
                 url_primary TEXT,
                 venue TEXT,
                 dedup_cluster_id TEXT NOT NULL,
@@ -77,6 +78,8 @@ class Storage:
         # Ensure source_hash exists and is indexed for idempotency across runs.
         if not self._column_exists("sources", "source_hash"):
             self.conn.execute("ALTER TABLE sources ADD COLUMN source_hash TEXT")
+        if not self._column_exists("papers", "bibcode"):
+            self.conn.execute("ALTER TABLE papers ADD COLUMN bibcode TEXT")
         self.conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_paper_hash ON sources(paper_id, source_hash)"
         )
@@ -92,9 +95,9 @@ class Storage:
                 self.conn.execute(
                     """
                     INSERT OR REPLACE INTO papers (
-                        canonical_id, title, year, abstract, doi, arxiv_id, url_primary,
+                        canonical_id, title, year, abstract, doi, arxiv_id, bibcode, url_primary,
                         venue, dedup_cluster_id, merge_confidence, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(paper.canonical_id),
@@ -103,6 +106,7 @@ class Storage:
                         paper.abstract,
                         paper.doi,
                         paper.arxiv_id,
+                        paper.bibcode,
                         paper.url_primary,
                         paper.venue,
                         paper.dedup_cluster_id,

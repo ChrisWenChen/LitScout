@@ -173,9 +173,21 @@ def _parse_goals(text: str) -> list[ResearchGoal]:
             stripped = raw.strip()
             if _GOAL_HEADER_RE.match(stripped):
                 break
-            if stripped.startswith("description:") or stripped in ("**描述**", "描述", "描述:"):
+            if stripped.startswith("description:") or stripped.startswith("Description:") or stripped in (
+                "**描述**",
+                "描述",
+                "描述:",
+                "**Description**",
+                "Description",
+            ):
                 current_key = "description"
-                if stripped.endswith("|") or stripped in ("**描述**", "描述", "描述:"):
+                if stripped.endswith("|") or stripped in (
+                    "**描述**",
+                    "描述",
+                    "描述:",
+                    "**Description**",
+                    "Description",
+                ):
                     description = ""
                 else:
                     description = stripped.split(":", 1)[1].strip()
@@ -198,7 +210,14 @@ def _parse_goals(text: str) -> list[ResearchGoal]:
                     raw2 = lines[idx]
                     stripped2 = raw2.strip()
                     if _GOAL_HEADER_RE.match(stripped2) or stripped2.startswith(
-                        ("negative_signals:", "description:", "**负向信号", "**描述**")
+                        (
+                            "negative_signals:",
+                            "description:",
+                            "Description:",
+                            "**负向信号",
+                            "**描述**",
+                            "**Description**",
+                        )
                     ):
                         break
                     if stripped2.startswith("- "):
@@ -212,7 +231,14 @@ def _parse_goals(text: str) -> list[ResearchGoal]:
                     raw2 = lines[idx]
                     stripped2 = raw2.strip()
                     if _GOAL_HEADER_RE.match(stripped2) or stripped2.startswith(
-                        ("signals:", "description:", "**正向信号", "**描述**")
+                        (
+                            "signals:",
+                            "description:",
+                            "Description:",
+                            "**正向信号",
+                            "**描述**",
+                            "**Description**",
+                        )
                     ):
                         break
                     if stripped2.startswith("- "):

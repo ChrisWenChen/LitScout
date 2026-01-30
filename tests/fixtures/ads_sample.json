@@ -1,0 +1,18 @@
+{
+  "response": {
+    "docs": [
+      {
+        "title": ["ADS Title"],
+        "author": ["Alice", "Bob"],
+        "year": "2022",
+        "abstract": "ADS abstract",
+        "doi": ["10.9999/ADS"],
+        "identifier": ["arXiv:2201.00001", "DOI:10.9999/ADS"],
+        "bibcode": "2022ApJ...123..456A",
+        "pub": "ApJ",
+        "pub_raw": ["ApJ"],
+        "arxiv_class": ["astro-ph"]
+      }
+    ]
+  }
+}

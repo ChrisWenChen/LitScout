@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
 from typing import Iterable
-import asyncio
 
 from pydantic import ValidationError
 
@@ -215,6 +216,7 @@ async def enrich_papers(
     goal_weight: float = 0.2,
     max_concurrency: int = 1,
 ) -> list[EnrichedPaper]:
+    logger = logging.getLogger(__name__)
     async def _process_batch(batch: list[CanonicalPaper]) -> list[EnrichedPaper]:
         if len(batch) == 1:
             prompt = build_prompt_single(batch[0], goal, skill)
@@ -277,22 +279,21 @@ async def enrich_papers(
         return enriched_batch
 
     batches = list(_batch_iter(papers, batch_size))
-    print("=" * 60)
-    print(
-        "LLM batching",
+    logger.info(
+        "LLM batching %s",
         {
             "total_papers": len(papers),
             "batch_size": batch_size,
             "total_batches": len(batches),
         },
     )
-    print("=" * 60)
     if max_concurrency <= 1:
         results: list[EnrichedPaper] = []
         for idx, batch in enumerate(batches, start=1):
-            print("-" * 60)
-            print("LLM batch start", {"batch_index": idx, "total_batches": len(batches)})
-            print("-" * 60)
+            logger.info(
+                "LLM batch start %s",
+                {"batch_index": idx, "total_batches": len(batches)},
+            )
             results.extend(await _process_batch(batch))
         return results
 
@@ -300,9 +301,10 @@ async def enrich_papers(
 
     async def _bounded(batch: list[CanonicalPaper], idx: int) -> list[EnrichedPaper]:
         async with sem:
-            print("-" * 60)
-            print("LLM batch start", {"batch_index": idx, "total_batches": len(batches)})
-            print("-" * 60)
+            logger.info(
+                "LLM batch start %s",
+                {"batch_index": idx, "total_batches": len(batches)},
+            )
             return await _process_batch(batch)
 
     tasks = [

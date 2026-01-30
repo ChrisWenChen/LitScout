@@ -14,6 +14,7 @@ def test_storage_roundtrip(tmp_path):
         abstract="abstract",
         doi="10.1/xyz",
         arxiv_id="1234.5678",
+        bibcode="2024A&A...123..456A",
         url_primary="http://example.com",
         venue="TestConf",
         sources=[
@@ -33,6 +34,8 @@ def test_storage_roundtrip(tmp_path):
     conn = sqlite3.connect(db_path)
     cur = conn.execute("SELECT COUNT(*) FROM papers")
     assert cur.fetchone()[0] == 1
+    cur = conn.execute("SELECT bibcode FROM papers")
+    assert cur.fetchone()[0] == "2024A&A...123..456A"
     cur = conn.execute("SELECT COUNT(*) FROM authors")
     assert cur.fetchone()[0] == 2
     cur = conn.execute("SELECT COUNT(*) FROM sources")

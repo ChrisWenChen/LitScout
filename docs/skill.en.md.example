@@ -1,6 +1,6 @@
 ---
 version: "1.0"
-language: "zh"
+language: "en"
 scoring:
   weights:
     relevance: 0.5
@@ -31,21 +31,21 @@ llm:
 
 # Monte Carlo Sign Problem Skill
 
-> **说明**  
-> 该 skill 仅基于论文的标题、摘要、关键词、arXiv 分类、年份等元数据进行判断与排序，  
-> 不假设阅读或理解全文内容；所有结论需显式表达不确定性。
+> **Note**  
+> This skill makes judgments and rankings only from metadata such as the paper title, abstract, keywords, arXiv categories, and year.  
+> It does not assume the full text is read or understood; all conclusions must explicitly express uncertainty.
 
 ---
 
 ## Research Goals
 
-### G1：符号问题的来源（Origin / Cause）
+### G1: Origin / Cause of the Sign Problem
 
-**描述**  
-关注量子蒙特卡洛（QMC）中符号问题产生的物理或形式原因，包括费米统计、几何挫折、
-权重非正定性、基变换依赖以及非 stoquastic 哈密顿量等。
+**Description**  
+Focus on the physical or formal sources of the sign problem in quantum Monte Carlo (QMC), including Fermi statistics, geometric frustration,
+non-positive-definite weights, basis dependence, and non-stoquastic Hamiltonians.
 
-**正向信号（signals）**
+**Positive signals**
 - sign problem  
 - fermionic  
 - negative weight  
@@ -55,20 +55,20 @@ llm:
 - basis dependence  
 - non-stoquastic  
 
-**负向信号（negative_signals）**
+**Negative signals**
 - classical Monte Carlo  
 - no sign problem  
 
 ---
 
-### G2：符号问题的减弱、规避或利用
+### G2: Mitigation, Avoidance, or Use of the Sign Problem
 
-**描述**  
-关注缓解、规避或重新表述符号问题的方法，
-包括重加权、约束路径、固定节点、对偶表示、机器学习辅助方法，
-以及将符号或平均符号视为物理信息加以利用的工作。
+**Description**  
+Focus on methods that mitigate, avoid, or reformulate the sign problem,
+including reweighting, constrained path, fixed-node, dual representations, machine-learning-assisted methods,
+and work that treats the sign or average sign as physical information.
 
-**正向信号（signals）**
+**Positive signals**
 - reweighting  
 - sign mitigation  
 - alleviate sign problem  
@@ -80,19 +80,19 @@ llm:
 - neural network  
 - variational Monte Carlo  
 
-**负向信号（negative_signals）**
+**Negative signals**
 - exact diagonalization only  
 - purely analytical  
 
 ---
 
-### G3：符号问题与相变 / 临界性的关系
+### G3: Relation Between the Sign Problem and Phase Transitions / Criticality
 
-**描述**  
-研究符号问题强度（如平均符号）与物理相变、量子临界行为、
-拓扑相或相结构变化之间的关联。
+**Description**  
+Study the relationship between sign-problem strength (e.g., average sign) and physical phase transitions, quantum critical behavior,
+topological phases, or changes in phase structure.
 
-**正向信号（signals）**
+**Positive signals**
 - phase transition  
 - quantum critical  
 - critical point  
@@ -101,79 +101,79 @@ llm:
 - average sign  
 - sign average  
 
-**负向信号（negative_signals）**
+**Negative signals**
 - finite-size only  
 - algorithm performance only  
 
 ---
 
-## 分类标准（仅基于元数据）
+## Classification Criteria (Metadata Only)
 
 ### Survey / Meta
-**判据**
-- 标题或摘要包含 *review / survey / perspective*
-- 引用量在同年代中显著偏高
-- 内容覆盖多个模型或方法
+**Criteria**
+- Title or abstract includes *review / survey / perspective*
+- Citation count is significantly higher than peers from the same period
+- Covers multiple models or methods
 
 ---
 
 ### Theory
-**判据**
-- 强调符号问题的起源、不可解性或计算复杂性
-- 出现 *theorem, proof, NP-hard, complexity* 等词
-- 很少或不强调数值实验
+**Criteria**
+- Emphasizes the origin, intractability, or computational complexity of the sign problem
+- Contains terms like *theorem, proof, NP-hard, complexity*
+- Has little or no emphasis on numerical experiments
 
 ---
 
 ### Method
-**判据**
-- 提出概念性或框架性的方法
-- 不以性能对比或规模扩展为核心
-- 常见词：*framework, approach, formulation*
+**Criteria**
+- Proposes a conceptual or framework-level method
+- Performance comparisons or scaling are not the core focus
+- Common terms: *framework, approach, formulation*
 
 ---
 
 ### Algorithm
-**判据**
-- 明确提出或改进具体算法
-- 强调效率、标度或数值稳定性
-- 出现 *scaling, efficiency, speedup* 等关键词
+**Criteria**
+- Clearly proposes or improves a specific algorithm
+- Emphasizes efficiency, scaling, or numerical stability
+- Contains keywords like *scaling, efficiency, speedup*
 
 ---
 
 ### Benchmark / Dataset
-**判据**
-- 明确提出 benchmark 或数据集
-- 包含多方法或多模型的系统对比
-- 可能提及开源实现或标准评测流程
+**Criteria**
+- Clearly proposes a benchmark or dataset
+- Includes systematic comparisons across multiple methods or models
+- May mention open-source implementations or standard evaluation workflows
 
 ---
 
 ### Application
-**判据**
-- 聚焦具体物理模型或体系（如 Hubbard、spin liquid）
-- 符号问题作为计算障碍而非研究核心
-- 目标是获得体系的物理结论
+**Criteria**
+- Focuses on a specific physical model or system (e.g., Hubbard, spin liquid)
+- The sign problem is a computational obstacle rather than the research core
+- The goal is to obtain physical conclusions about the system
 
 ---
 
-## 排序逻辑（Scoring Heuristics）
+## Scoring Heuristics
 
-- **相关性（0.5）**  
-  元数据中是否直接或多次提及 sign problem、average sign 等核心词。
+- **Relevance (0.5)**  
+  Whether metadata directly or repeatedly mentions core terms like sign problem, average sign, etc.
 
-- **重要性（0.3）**  
-  是否具有跨模型通用性、方法可迁移性，或在后续工作中被频繁引用。
+- **Importance (0.3)**  
+  Whether the work is broadly applicable across models, methods are transferable, or it is frequently cited in later work.
 
-- **时效性（0.2）**  
-  对较新的研究方向给予加权，例如：
-  - 机器学习与符号问题
-  - 非 stoquastic 哈密顿量
-  - 与量子计算或量子算法的交叉
+- **Recency (0.2)**  
+  Give additional weight to newer directions, for example:
+  - machine learning and the sign problem
+  - non-stoquastic Hamiltonians
+  - intersections with quantum computing or quantum algorithms
 
 ---
 
-## 不确定性输出要求
+## Uncertainty Output Requirements
 
-- 所有判断需使用“可能 / 推测 / 从摘要判断”等表述。
-- 不允许声称“论文证明了/表明了”除非标题或摘要中明确给出。
+- All judgments must use wording like “possibly / likely / inferred from the abstract.”
+- Do not claim “the paper proves/shows” unless the title or abstract explicitly states so.

@@ -76,6 +76,8 @@ def dedupe_papers(
             keys.append(f"doi:{paper.doi}")
         if paper.arxiv_id:
             keys.append(f"arxiv:{paper.arxiv_id}")
+        if paper.bibcode:
+            keys.append(f"bibcode:{paper.bibcode}")
         if not strict:
             norm_title = normalize_title(paper.title)
             if norm_title:
@@ -96,13 +98,16 @@ def dedupe_papers(
     for group in clusters.values():
         group_dois = {p.doi for p in group if p.doi}
         group_arxiv = {p.arxiv_id for p in group if p.arxiv_id}
+        group_bibcodes = {p.bibcode for p in group if p.bibcode}
         norm_titles = {normalize_title(p.title) for p in group if p.title}
         doi_count = sum(1 for p in group if p.doi)
         arxiv_count = sum(1 for p in group if p.arxiv_id)
+        bibcode_count = sum(1 for p in group if p.bibcode)
 
         if len(group) > 1 and (
             (doi_count >= 2 and len(group_dois) == 1)
             or (arxiv_count >= 2 and len(group_arxiv) == 1)
+            or (bibcode_count >= 2 and len(group_bibcodes) == 1)
         ):
             confidence = "high"
         elif not strict and len(group) > 1 and len(norm_titles) == 1:
@@ -116,6 +121,7 @@ def dedupe_papers(
         venue = group[0].venue
         doi = group[0].doi
         arxiv_id = group[0].arxiv_id
+        bibcode = group[0].bibcode
 
         for paper in group[1:]:
             title = _choose_longer(title, paper.title)
@@ -124,6 +130,7 @@ def dedupe_papers(
             venue = _choose_longer(venue, paper.venue)
             doi = doi or paper.doi
             arxiv_id = arxiv_id or paper.arxiv_id
+            bibcode = bibcode or paper.bibcode
 
         authors = _prefer_arxiv_authors(group)
         year, year_notes = _earliest_year(group)
@@ -136,6 +143,8 @@ def dedupe_papers(
             dedup_cluster_id = f"doi:{doi}"
         elif arxiv_id:
             dedup_cluster_id = f"arxiv:{arxiv_id}"
+        elif bibcode:
+            dedup_cluster_id = f"bibcode:{bibcode}"
         else:
             dedup_cluster_id = f"title:{normalize_title(title)}"
 
@@ -147,6 +156,7 @@ def dedupe_papers(
             abstract=abstract,
             doi=doi,
             arxiv_id=arxiv_id,
+            bibcode=bibcode,
             url_primary=url_primary,
             venue=venue,
             sources=sources,

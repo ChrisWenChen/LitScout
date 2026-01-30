@@ -2,7 +2,14 @@ from litscout.core.dedupe import dedupe_papers
 from litscout.core.models import CanonicalPaper, SourceRecord, utc_now_iso
 
 
-def _paper(title: str, doi: str | None, arxiv_id: str | None, year: int | None, source: str):
+def _paper(
+    title: str,
+    doi: str | None,
+    arxiv_id: str | None,
+    bibcode: str | None,
+    year: int | None,
+    source: str,
+):
     return CanonicalPaper(
         title=title,
         authors=["A"],
@@ -10,6 +17,7 @@ def _paper(title: str, doi: str | None, arxiv_id: str | None, year: int | None, 
         abstract="short",
         doi=doi,
         arxiv_id=arxiv_id,
+        bibcode=bibcode,
         url_primary=None,
         venue=None,
         sources=[
@@ -26,8 +34,8 @@ def _paper(title: str, doi: str | None, arxiv_id: str | None, year: int | None, 
 
 
 def test_dedupe_by_doi():
-    p1 = _paper("Title", "10.1/abc", None, 2021, "arxiv")
-    p2 = _paper("Title", "10.1/abc", None, 2020, "semantic_scholar")
+    p1 = _paper("Title", "10.1/abc", None, None, 2021, "arxiv")
+    p2 = _paper("Title", "10.1/abc", None, None, 2020, "semantic_scholar")
     merged, notes = dedupe_papers([p1, p2])
     assert len(merged) == 1
     assert merged[0].merge_confidence == "high"
@@ -36,15 +44,23 @@ def test_dedupe_by_doi():
 
 
 def test_dedupe_by_title():
-    p1 = _paper("Graph Neural Networks", None, None, 2022, "arxiv")
-    p2 = _paper("Graph Neural Networks", None, None, 2022, "semantic_scholar")
+    p1 = _paper("Graph Neural Networks", None, None, None, 2022, "arxiv")
+    p2 = _paper("Graph Neural Networks", None, None, None, 2022, "semantic_scholar")
     merged, _ = dedupe_papers([p1, p2])
     assert len(merged) == 1
     assert merged[0].merge_confidence == "medium"
 
 
 def test_dedupe_strict_disables_title_merge():
-    p1 = _paper("Graph Neural Networks", None, None, 2022, "arxiv")
-    p2 = _paper("Graph Neural Networks", None, None, 2022, "semantic_scholar")
+    p1 = _paper("Graph Neural Networks", None, None, None, 2022, "arxiv")
+    p2 = _paper("Graph Neural Networks", None, None, None, 2022, "semantic_scholar")
     merged, _ = dedupe_papers([p1, p2], strict=True)
     assert len(merged) == 2
+
+
+def test_dedupe_by_bibcode():
+    p1 = _paper("ADS Paper", None, None, "2022ApJ...123..456A", 2022, "ads")
+    p2 = _paper("ADS Paper", None, None, "2022ApJ...123..456A", 2021, "ads")
+    merged, _ = dedupe_papers([p1, p2])
+    assert len(merged) == 1
+    assert merged[0].merge_confidence == "high"
