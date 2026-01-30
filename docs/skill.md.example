@@ -1,0 +1,179 @@
+---
+version: "1.0"
+language: "zh"
+scoring:
+  weights:
+    relevance: 0.5
+    importance: 0.3
+    recency: 0.2
+  recency_half_life_years: 4
+
+classification:
+  taxonomy:
+    - "Survey/Meta"
+    - "Theory"
+    - "Method"
+    - "Algorithm"
+    - "Benchmark/Dataset"
+    - "Application"
+  max_tags: 6
+
+output:
+  uncertainty_style: "explicit"
+  evidence_style: "metadata_only"
+
+llm:
+  provider: "mimo"
+  model: "mimo-v2-flash"
+  temperature: 0.1
+  max_tokens: 800
+---
+
+# Monte Carlo Sign Problem Skill
+
+> **说明**  
+> 该 skill 仅基于论文的标题、摘要、关键词、arXiv 分类、年份等元数据进行判断与排序，  
+> 不假设阅读或理解全文内容；所有结论需显式表达不确定性。
+
+---
+
+## Research Goals
+
+### G1：符号问题的来源（Origin / Cause）
+
+**描述**  
+关注量子蒙特卡洛（QMC）中符号问题产生的物理或形式原因，包括费米统计、几何挫折、
+权重非正定性、基变换依赖以及非 stoquastic 哈密顿量等。
+
+**正向信号（signals）**
+- sign problem  
+- fermionic  
+- negative weight  
+- complex weight  
+- phase problem  
+- frustration  
+- basis dependence  
+- non-stoquastic  
+
+**负向信号（negative_signals）**
+- classical Monte Carlo  
+- no sign problem  
+
+---
+
+### G2：符号问题的减弱、规避或利用
+
+**描述**  
+关注缓解、规避或重新表述符号问题的方法，
+包括重加权、约束路径、固定节点、对偶表示、机器学习辅助方法，
+以及将符号或平均符号视为物理信息加以利用的工作。
+
+**正向信号（signals）**
+- reweighting  
+- sign mitigation  
+- alleviate sign problem  
+- constrained path  
+- fixed-node  
+- meron-cluster  
+- dual representation  
+- machine learning  
+- neural network  
+- variational Monte Carlo  
+
+**负向信号（negative_signals）**
+- exact diagonalization only  
+- purely analytical  
+
+---
+
+### G3：符号问题与相变 / 临界性的关系
+
+**描述**  
+研究符号问题强度（如平均符号）与物理相变、量子临界行为、
+拓扑相或相结构变化之间的关联。
+
+**正向信号（signals）**
+- phase transition  
+- quantum critical  
+- critical point  
+- order parameter  
+- topological phase  
+- average sign  
+- sign average  
+
+**负向信号（negative_signals）**
+- finite-size only  
+- algorithm performance only  
+
+---
+
+## 分类标准（仅基于元数据）
+
+### Survey / Meta
+**判据**
+- 标题或摘要包含 *review / survey / perspective*
+- 引用量在同年代中显著偏高
+- 内容覆盖多个模型或方法
+
+---
+
+### Theory
+**判据**
+- 强调符号问题的起源、不可解性或计算复杂性
+- 出现 *theorem, proof, NP-hard, complexity* 等词
+- 很少或不强调数值实验
+
+---
+
+### Method
+**判据**
+- 提出概念性或框架性的方法
+- 不以性能对比或规模扩展为核心
+- 常见词：*framework, approach, formulation*
+
+---
+
+### Algorithm
+**判据**
+- 明确提出或改进具体算法
+- 强调效率、标度或数值稳定性
+- 出现 *scaling, efficiency, speedup* 等关键词
+
+---
+
+### Benchmark / Dataset
+**判据**
+- 明确提出 benchmark 或数据集
+- 包含多方法或多模型的系统对比
+- 可能提及开源实现或标准评测流程
+
+---
+
+### Application
+**判据**
+- 聚焦具体物理模型或体系（如 Hubbard、spin liquid）
+- 符号问题作为计算障碍而非研究核心
+- 目标是获得体系的物理结论
+
+---
+
+## 排序逻辑（Scoring Heuristics）
+
+- **相关性（0.5）**  
+  元数据中是否直接或多次提及 sign problem、average sign 等核心词。
+
+- **重要性（0.3）**  
+  是否具有跨模型通用性、方法可迁移性，或在后续工作中被频繁引用。
+
+- **时效性（0.2）**  
+  对较新的研究方向给予加权，例如：
+  - 机器学习与符号问题
+  - 非 stoquastic 哈密顿量
+  - 与量子计算或量子算法的交叉
+
+---
+
+## 不确定性输出要求
+
+- 所有判断需使用“可能 / 推测 / 从摘要判断”等表述。
+- 不允许声称“论文证明了/表明了”除非标题或摘要中明确给出。

@@ -8,5 +8,9 @@ __pycache__/
 .cache/
 results_raw.md
 results_raw.jsonl
+results_enriched.md
+results_enriched.jsonl
 output-*/
 *.db
+.egg-info/
+src/litscout.egg-info/

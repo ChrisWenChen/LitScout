@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Iterable
 import hashlib
+import time
 
 from .models import CanonicalPaper, SourceRecord
 
@@ -16,9 +17,19 @@ class Storage:
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self.conn = sqlite3.connect(self.db_path, timeout=30.0)
         self.conn.execute("PRAGMA foreign_keys = ON")
-        self.conn.execute("PRAGMA journal_mode = WAL")
+        self._set_wal_mode()
         self.conn.execute("PRAGMA busy_timeout = 5000")
         self._init_schema()
+
+    def _set_wal_mode(self) -> None:
+        for attempt in range(5):
+            try:
+                self.conn.execute("PRAGMA journal_mode = WAL")
+                return
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() or attempt == 4:
+                    raise
+                time.sleep(0.05 * (2**attempt))
 
     def _init_schema(self) -> None:
         self.conn.executescript(

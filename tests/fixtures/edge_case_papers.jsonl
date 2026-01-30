@@ -1,0 +1,5 @@
+{"title":"Edge Case Paper 1","content":"This is a test paper with an edge case scenario involving missing authors."}
+{"title":"Edge Case Paper 2","content":"This paper has an unusually long title that exceeds typical length limits."}
+{"title":"Edge Case Paper 3","content":"This paper contains special characters in the title: @#$%^&*()!"}
+{"title":"Edge Case Paper 4","content":"This paper has no abstract."}
+{"title":"Edge Case Paper 5","content":"This paper is a duplicate of another paper in the dataset."}

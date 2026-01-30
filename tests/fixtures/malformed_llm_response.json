@@ -1,0 +1,17 @@
+{
+  "response": {
+    "status": "error",
+    "message": "Invalid input",
+    "data": null
+  },
+  "errors": [
+    {
+      "code": "INVALID_FORMAT",
+      "description": "The input format is not recognized."
+    },
+    {
+      "code": "MISSING_FIELD",
+      "description": "Required field 'query' is missing."
+    }
+  ]
+}

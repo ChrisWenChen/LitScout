@@ -21,6 +21,19 @@ def test_validation_since_not_future():
     assert "since cannot be in the future" in result.output
 
 
+def test_validation_year_to_not_future():
+    future_year = datetime.now(timezone.utc).year + 1
+    result = runner.invoke(app, ["search", "test", "--year-to", str(future_year)])
+    assert result.exit_code != 0
+    assert "year-to cannot be in the future" in result.output
+
+
+def test_validation_since_not_greater_than_year_to():
+    result = runner.invoke(app, ["search", "test", "--since", "2020", "--year-to", "2010"])
+    assert result.exit_code != 0
+    assert "since cannot be greater than year-to" in result.output
+
+
 def test_validation_query_non_empty():
     result = runner.invoke(app, ["search", ""])  # empty query
     assert result.exit_code != 0

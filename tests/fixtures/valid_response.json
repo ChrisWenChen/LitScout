@@ -1,0 +1,15 @@
+{
+  "paper_id": "00000000-0000-0000-0000-000000000001",
+  "summary": "One-sentence summary.",
+  "methods": [
+    "DQMC"
+  ],
+  "priority": "P2",
+  "score": 0.62,
+  "goal_scores": [
+    {
+      "goal_id": "G1",
+      "score": 0.45
+    }
+  ]
+}

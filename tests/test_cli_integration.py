@@ -63,6 +63,10 @@ def test_cli_search_full_flow(tmp_path, monkeypatch):
             str(out_jsonl),
             "--db",
             str(db_path),
+            "--since",
+            "2020",
+            "--year-to",
+            "2024",
         ],
     )
 
@@ -97,8 +101,10 @@ def test_cli_cache_hit_skips_fetch(tmp_path, monkeypatch):
 
     asyncio.run(
         cli._run_search(
+            ["cache test"],
             "cache test",
             2,
+            None,
             None,
             str(out_md),
             str(out_jsonl),
@@ -108,6 +114,7 @@ def test_cli_cache_hit_skips_fetch(tmp_path, monkeypatch):
             False,
             3600,
             2000,
+            False,
         )
     )
 
@@ -119,8 +126,10 @@ def test_cli_cache_hit_skips_fetch(tmp_path, monkeypatch):
 
     asyncio.run(
         cli._run_search(
+            ["cache test"],
             "cache test",
             2,
+            None,
             None,
             str(out_md),
             str(out_jsonl),
@@ -130,6 +139,7 @@ def test_cli_cache_hit_skips_fetch(tmp_path, monkeypatch):
             False,
             3600,
             2000,
+            False,
         )
     )
 
@@ -168,3 +178,49 @@ def test_cli_logs_sqlite_error(tmp_path, monkeypatch, caplog):
 
     assert result.exit_code != 0
     assert "SQLite operational error" in caplog.text
+
+
+def test_cli_filters_year_range(tmp_path, monkeypatch):
+    async def _fake_arxiv(*_args, **_kwargs):
+        return [
+            _paper("Paper Old", "arxiv", "arxiv:old").model_copy(
+                update={"year": 1990, "arxiv_id": "old.0001", "doi": "10.1000/old"}
+            ),
+            _paper("Paper InRange", "arxiv", "arxiv:mid").model_copy(
+                update={"year": 2000, "arxiv_id": "mid.0001", "doi": "10.1000/mid"}
+            ),
+            _paper("Paper New", "arxiv", "arxiv:new").model_copy(
+                update={"year": 2010, "arxiv_id": "new.0001", "doi": "10.1000/new"}
+            ),
+        ]
+
+    monkeypatch.setattr(cli, "search_arxiv", _fake_arxiv)
+    monkeypatch.setenv("S2_API_KEY", "")
+
+    out_md = tmp_path / "out.md"
+    out_jsonl = tmp_path / "out.jsonl"
+    db_path = tmp_path / "litscout.db"
+
+    asyncio.run(
+        cli._run_search(
+            ["year range"],
+            "year range",
+            50,
+            1995,
+            2005,
+            str(out_md),
+            str(out_jsonl),
+            str(db_path),
+            True,
+            10.0,
+            False,
+            3600,
+            2000,
+            False,
+        )
+    )
+
+    md_text = out_md.read_text(encoding="utf-8")
+    assert "Paper InRange" in md_text
+    assert "Paper Old" not in md_text
+    assert "Paper New" not in md_text
